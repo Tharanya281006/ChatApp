@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChatApp</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="landing-page">
+  <section class="landing-card">
+    <div class="logo">C</div>
+    <h1>ChatApp</h1>
+    <p>Real-time rooms, private invites, JWT authentication, and online users.</p>
+    <div class="landing-actions">
+      <a class="button primary" href="/login">Login or Register</a>
+      <a class="button secondary" href="/chat">Open Chat</a>
+    </div>
+  </section>
+  <script>
+    if (localStorage.getItem('chat_token')) {
+      window.location.href = '/chat';
+    }
+  </script>
+</body>
+</html>

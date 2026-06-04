@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login | ChatApp</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="auth-page">
+  <main class="auth-card">
+    <div class="logo">C</div>
+    <h1>Welcome to ChatApp</h1>
+    <p>Create an account or login to start chatting.</p>
+
+    <div class="tabs">
+      <button id="loginTab" class="tab active" type="button">Login</button>
+      <button id="registerTab" class="tab" type="button">Register</button>
+    </div>
+
+    <form id="authForm" class="stacked-form">
+      <label for="username">Username</label>
+      <input id="username" name="username" type="text" minlength="3" autocomplete="username" placeholder="alice" required>
+
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" minlength="6" autocomplete="current-password" placeholder="At least 6 characters" required>
+
+      <button id="authButton" class="button primary full-width" type="submit">Login</button>
+      <p id="authMessage" class="message error" role="alert"></p>
+    </form>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

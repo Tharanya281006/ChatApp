@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat | ChatApp</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="chat-page">
+  <div class="chat-layout">
+    <aside class="left-panel">
+      <header class="panel-header">
+        <div>
+          <span class="eyebrow">Signed in</span>
+          <strong id="currentUser">-</strong>
+        </div>
+        <button id="logoutButton" class="button ghost" type="button">Logout</button>
+      </header>
+
+      <section class="panel-section">
+        <h2>Rooms</h2>
+        <div id="roomList" class="room-list"></div>
+      </section>
+
+      <section class="panel-section card-box">
+        <h2>Create private room</h2>
+        <form id="createRoomForm" class="inline-form">
+          <input id="privateRoomName" type="text" placeholder="Room name" required>
+          <button class="button secondary" type="submit">Create</button>
+        </form>
+      </section>
+
+      <section class="panel-section card-box">
+        <h2>Join invite</h2>
+        <form id="inviteForm" class="inline-form">
+          <input id="inviteCode" type="text" placeholder="Invite code" required>
+          <button class="button secondary" type="submit">Join</button>
+        </form>
+      </section>
+    </aside>
+
+    <main class="center-panel">
+      <header class="chat-header">
+        <div>
+          <span class="eyebrow">Current room</span>
+          <h1 id="roomTitle">Choose a room</h1>
+        </div>
+        <div id="inviteBox" class="invite-box hidden"></div>
+      </header>
+
+      <section id="messageList" class="message-list" aria-live="polite"></section>
+
+      <form id="messageForm" class="composer">
+        <input id="messageInput" type="text" maxlength="1000" placeholder="Join a room to start chatting" autocomplete="off" disabled>
+        <button id="sendButton" class="button primary" type="submit" disabled>Send</button>
+      </form>
+    </main>
+
+    <aside class="right-panel">
+      <header class="online-header">
+        <h2>Online</h2>
+        <span id="onlineCount">0</span>
+      </header>
+      <ul id="onlineUsers" class="online-list"></ul>
+    </aside>
+  </div>
+
+  <div id="toast" class="toast hidden" role="status"></div>
+  <script src="/app.js"></script>
+</body>
+</html>
