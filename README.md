@@ -1,19 +1,20 @@
 # ChatApp
 
-A complete full-stack real-time chat application using Node.js, Express, WebSocket (`ws`), JWT authentication, and a vanilla HTML/CSS/JavaScript frontend.
+A complete full-stack real-time chat application using Node.js, Express, WebSocket (`ws`), JWT authentication, in-memory groups, invite codes, and a vanilla HTML/CSS/JavaScript frontend.
 
 ## Features
 
 - Register and login with username + password
 - JWT authentication stored in browser `localStorage`
-- Express REST API for auth and room/invite management
+- Express REST API for auth and group invite management
 - WebSocket chat connections protected by JWT validation
-- Default chat rooms: General, Tech, Random, Projects
-- One active room subscription per WebSocket connection
-- Private rooms with unique invite codes and invite links
-- In-memory room messages with username, timestamp, and text
-- Real-time message broadcasting within the active room
-- Online users list updated when users join/leave rooms
+- Default public groups: General, Tech, Random, Projects
+- User-created private groups with unique invite codes like `CHAT-4821`
+- Creator is automatically added to the private group members list
+- Join private groups by entering a valid invite code
+- Access rules: only members can join a private group WebSocket room, receive group messages, and send group messages
+- In-memory group messages with `username`, `timestamp`, and `message`
+- Online users list updated when users join/leave groups
 - Modern Discord-inspired three-panel chat interface
 
 ## Required Folder Structure
@@ -79,11 +80,12 @@ JWT_EXPIRES_IN=1d
 2. Click **Login or Register**.
 3. Register with a username and password.
 4. The app stores the JWT in `localStorage` and redirects you to `/chat`.
-5. Select a public room or use the default General room.
+5. Select a public group or use the default General group.
 6. Send messages in real time.
-7. Create a private room from the left sidebar.
+7. Create a private group from the left sidebar.
 8. Share its invite code or invite link with another user.
-9. The invited user can paste the invite code or open the invite link to join the private room.
+9. The invited user can paste the invite code or open the invite link to join the private group.
+10. Only joined members can open that private group, receive its messages, or send messages to it.
 
 ## REST API
 
@@ -106,16 +108,20 @@ Both endpoints return:
 }
 ```
 
-### Rooms
+### Groups
 
-Room routes require an `Authorization: Bearer <token>` header.
+Group routes require an `Authorization: Bearer <token>` header.
 
-- `GET /api/rooms` - List rooms visible to the current user
-- `POST /api/rooms/private` - Create a private room
-  - Body: `{ "name": "Team Room" }`
-- `POST /api/rooms/join` - Join a private room using an invite code
-  - Body: `{ "inviteCode": "A1B2C3D4" }`
-- `GET /api/rooms/:roomId/messages` - Read in-memory message history for a room
+- `GET /api/groups` - List public groups and private groups the current user has joined
+- `POST /api/groups` - Create a private group and automatically add the creator as a member
+  - Body: `{ "groupName": "Team Group" }`
+  - Response includes `groupId`, `groupName`, `inviteCode`, and `members`
+- `POST /api/groups/join` - Join a private group using an invite code
+  - Body: `{ "inviteCode": "CHAT-4821" }`
+  - Invalid codes return `{ "message": "Invalid invite code" }`
+- `GET /api/groups/:groupId/messages` - Read in-memory message history for a group the user can access
+
+Backward-compatible `/api/rooms` routes are also present for the existing frontend/room terminology, but new code should use `/api/groups`.
 
 ## WebSocket API
 
@@ -129,27 +135,27 @@ Client packets use this shape:
 
 ```json
 {
-  "event": "room:join",
+  "event": "group:join",
   "payload": {
-    "roomId": "general"
+    "groupId": "general"
   }
 }
 ```
 
 Client events:
 
-- `room:join` - Join one room and leave the previous room
-- `message:send` - Send a message to the active room
+- `group:join` - Join one group and leave the previous group. Private groups require prior invite-code membership.
+- `message:send` - Send a message to the active group. Payload may be `{ "message": "Hello" }` or `{ "text": "Hello" }`.
 
 Server events:
 
-- `rooms:list` - Rooms visible to the authenticated user
-- `room:joined` - Active room details, message history, and online users
-- `message:new` - New room message
+- `groups:list` - Groups visible to the authenticated user
+- `group:joined` - Active group details, message history, and online users
+- `message:new` - New group message shaped as `{ username, timestamp, message }`
 - `system:message` - Join/leave status message
-- `users:online` - Updated online users for the room
+- `users:online` - Updated online users for the group
 - `error` - Validation or permission error
 
 ## Notes
 
-This project intentionally stores users, rooms, online status, and messages in memory. Restarting the server clears all registered users, private rooms, and messages. For production, add persistent storage, HTTPS, stricter CORS settings, request rate limiting, and a strong `JWT_SECRET`.
+This project intentionally stores users, groups, online status, and messages in memory. Restarting the server clears all registered users, private groups, and messages. For production, add persistent storage, HTTPS, stricter CORS settings, request rate limiting, and a strong `JWT_SECRET`.

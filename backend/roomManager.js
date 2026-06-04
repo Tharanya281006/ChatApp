@@ -1,95 +1,111 @@
 const crypto = require('crypto');
 
-const DEFAULT_ROOMS = [
-  { id: 'general', name: 'General', isPrivate: false, inviteCode: null, members: new Set() },
-  { id: 'tech', name: 'Tech', isPrivate: false, inviteCode: null, members: new Set() },
-  { id: 'random', name: 'Random', isPrivate: false, inviteCode: null, members: new Set() },
-  { id: 'projects', name: 'Projects', isPrivate: false, inviteCode: null, members: new Set() }
+const DEFAULT_GROUPS = [
+  { groupId: 'general', groupName: 'General', inviteCode: 'GENERAL', isPublic: true, members: new Set() },
+  { groupId: 'tech', groupName: 'Tech', inviteCode: 'TECH', isPublic: true, members: new Set() },
+  { groupId: 'random', groupName: 'Random', inviteCode: 'RANDOM', isPublic: true, members: new Set() },
+  { groupId: 'projects', groupName: 'Projects', inviteCode: 'PROJECTS', isPublic: true, members: new Set() }
 ];
 
-const rooms = new Map();
-const messagesByRoom = new Map();
+const groups = new Map();
+const messagesByGroup = new Map();
 const onlineConnections = new Map();
 
-DEFAULT_ROOMS.forEach((room) => {
-  rooms.set(room.id, room);
-  messagesByRoom.set(room.id, []);
+DEFAULT_GROUPS.forEach((group) => {
+  groups.set(group.groupId, group);
+  messagesByGroup.set(group.groupId, []);
 });
 
-function toPublicRoom(room) {
+function createInviteCode() {
+  let inviteCode;
+
+  do {
+    inviteCode = `CHAT-${crypto.randomInt(1000, 10000)}`;
+  } while (findGroupByInviteCode(inviteCode));
+
+  return inviteCode;
+}
+
+function toPublicGroup(group, includeMembers = false) {
   return {
-    id: room.id,
-    name: room.name,
-    isPrivate: room.isPrivate,
-    inviteCode: room.inviteCode
+    groupId: group.groupId,
+    groupName: group.groupName,
+    inviteCode: group.inviteCode,
+    isPublic: group.isPublic,
+    members: includeMembers ? Array.from(group.members) : undefined,
+    id: group.groupId,
+    name: group.groupName,
+    isPrivate: !group.isPublic
   };
 }
 
-function listRoomsForUser(username) {
-  return Array.from(rooms.values())
-    .filter((room) => !room.isPrivate || room.members.has(username))
-    .map(toPublicRoom);
+function listGroupsForUser(username) {
+  return Array.from(groups.values())
+    .filter((group) => group.isPublic || group.members.has(username))
+    .map((group) => toPublicGroup(group));
 }
 
-function getRoom(roomId) {
-  return rooms.get(roomId);
+function getGroup(groupId) {
+  return groups.get(groupId);
 }
 
-function canJoinRoom(roomId, username) {
-  const room = rooms.get(roomId);
-  return Boolean(room && (!room.isPrivate || room.members.has(username)));
+function findGroupByInviteCode(inviteCode) {
+  const normalizedCode = String(inviteCode || '').trim().toUpperCase();
+  return Array.from(groups.values()).find((group) => group.inviteCode === normalizedCode);
 }
 
-function createPrivateRoom(roomName, username) {
-  const name = String(roomName || '').trim();
+function isGroupMember(groupId, username) {
+  const group = groups.get(groupId);
+  return Boolean(group && (group.isPublic || group.members.has(username)));
+}
+
+function createGroup(groupName, username) {
+  const name = String(groupName || '').trim();
 
   if (name.length < 2) {
-    const error = new Error('Room name must be at least 2 characters long.');
+    const error = new Error('Group name must be at least 2 characters long.');
     error.status = 400;
     throw error;
   }
 
-  const room = {
-    id: crypto.randomUUID(),
-    name,
-    isPrivate: true,
-    inviteCode: crypto.randomBytes(4).toString('hex').toUpperCase(),
+  const group = {
+    groupId: crypto.randomUUID(),
+    groupName: name,
+    inviteCode: createInviteCode(),
+    isPublic: false,
     members: new Set([username])
   };
 
-  rooms.set(room.id, room);
-  messagesByRoom.set(room.id, []);
+  groups.set(group.groupId, group);
+  messagesByGroup.set(group.groupId, []);
 
-  return toPublicRoom(room);
+  return toPublicGroup(group, true);
 }
 
-function joinRoomWithInvite(inviteCode, username) {
-  const normalizedCode = String(inviteCode || '').trim().toUpperCase();
-  const room = Array.from(rooms.values()).find(
-    (candidate) => candidate.isPrivate && candidate.inviteCode === normalizedCode
-  );
+function joinGroupWithInvite(inviteCode, username) {
+  const group = findGroupByInviteCode(inviteCode);
 
-  if (!room) {
-    const error = new Error('Invalid invite code.');
+  if (!group) {
+    const error = new Error('Invalid invite code');
     error.status = 404;
     throw error;
   }
 
-  room.members.add(username);
-  return toPublicRoom(room);
+  group.members.add(username);
+  return toPublicGroup(group, true);
 }
 
-function getMessages(roomId) {
-  return messagesByRoom.get(roomId) || [];
+function getMessages(groupId) {
+  return messagesByGroup.get(groupId) || [];
 }
 
-function addMessage(roomId, username, text) {
+function addMessage(groupId, username, messageText) {
   const message = {
     username,
-    text: String(text || '').trim(),
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    message: String(messageText || '').trim()
   };
-  const messages = messagesByRoom.get(roomId) || [];
+  const messages = messagesByGroup.get(groupId) || [];
 
   messages.push(message);
 
@@ -97,25 +113,21 @@ function addMessage(roomId, username, text) {
     messages.shift();
   }
 
-  messagesByRoom.set(roomId, messages);
+  messagesByGroup.set(groupId, messages);
   return message;
 }
 
-function setUserRoom(connectionId, username, roomId) {
-  onlineConnections.set(connectionId, { username, roomId });
+function setUserGroup(connectionId, username, groupId) {
+  onlineConnections.set(connectionId, { username, groupId });
 }
 
 function removeConnection(connectionId) {
   onlineConnections.delete(connectionId);
 }
 
-function getConnection(connectionId) {
-  return onlineConnections.get(connectionId);
-}
-
-function getOnlineUsers(roomId) {
+function getOnlineUsers(groupId) {
   return Array.from(onlineConnections.values())
-    .filter((connection) => connection.roomId === roomId)
+    .filter((connection) => connection.groupId === groupId)
     .map((connection) => connection.username)
     .filter((username, index, all) => all.indexOf(username) === index)
     .sort((a, b) => a.localeCompare(b));
@@ -123,15 +135,21 @@ function getOnlineUsers(roomId) {
 
 module.exports = {
   addMessage,
-  canJoinRoom,
-  createPrivateRoom,
-  getConnection,
+  canJoinRoom: isGroupMember,
+  createGroup,
+  createPrivateRoom: createGroup,
+  getGroup,
   getMessages,
   getOnlineUsers,
-  getRoom,
-  joinRoomWithInvite,
-  listRoomsForUser,
+  getRoom: getGroup,
+  isGroupMember,
+  joinGroupWithInvite,
+  joinRoomWithInvite: joinGroupWithInvite,
+  listGroupsForUser,
+  listRoomsForUser: listGroupsForUser,
   removeConnection,
-  setUserRoom,
-  toPublicRoom
+  setUserGroup,
+  setUserRoom: setUserGroup,
+  toPublicGroup,
+  toPublicRoom: toPublicGroup
 };

@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const WebSocket = require('ws');
 const { verifyToken } = require('./auth');
-const roomManager = require('./roomManager');
+const groupManager = require('./roomManager');
 
 function send(ws, event, payload) {
   if (ws.readyState === WebSocket.OPEN) {
@@ -12,77 +12,92 @@ function send(ws, event, payload) {
 function setupWebSocket(server) {
   const wss = new WebSocket.Server({ server, path: '/ws' });
 
-  function broadcastToRoom(roomId, event, payload) {
+  function broadcastToGroup(groupId, event, payload) {
     wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN && client.roomId === roomId) {
+      if (client.readyState === WebSocket.OPEN && client.groupId === groupId) {
         send(client, event, payload);
       }
     });
   }
 
-  function broadcastOnlineUsers(roomId) {
-    broadcastToRoom(roomId, 'users:online', {
-      roomId,
-      users: roomManager.getOnlineUsers(roomId)
+  function broadcastOnlineUsers(groupId) {
+    broadcastToGroup(groupId, 'users:online', {
+      groupId,
+      roomId: groupId,
+      users: groupManager.getOnlineUsers(groupId)
     });
   }
 
-  function leaveCurrentRoom(ws) {
-    if (!ws.roomId) {
+  function leaveCurrentGroup(ws) {
+    if (!ws.groupId) {
       return;
     }
 
-    const oldRoomId = ws.roomId;
+    const oldGroupId = ws.groupId;
+    ws.groupId = null;
     ws.roomId = null;
-    roomManager.setUserRoom(ws.id, ws.user.username, null);
-    broadcastOnlineUsers(oldRoomId);
+    groupManager.setUserGroup(ws.id, ws.user.username, null);
+    broadcastOnlineUsers(oldGroupId);
   }
 
-  function joinRoom(ws, roomId) {
-    if (!roomManager.canJoinRoom(roomId, ws.user.username)) {
-      send(ws, 'error', { message: 'You are not allowed to join that room.' });
+  function joinGroup(ws, groupId) {
+    if (!groupManager.isGroupMember(groupId, ws.user.username)) {
+      send(ws, 'error', { message: 'Invalid invite code' });
       return;
     }
 
-    leaveCurrentRoom(ws);
-    ws.roomId = roomId;
-    roomManager.setUserRoom(ws.id, ws.user.username, roomId);
+    leaveCurrentGroup(ws);
+    ws.groupId = groupId;
+    ws.roomId = groupId;
+    groupManager.setUserGroup(ws.id, ws.user.username, groupId);
 
-    const room = roomManager.getRoom(roomId);
+    const group = groupManager.getGroup(groupId);
+    send(ws, 'group:joined', {
+      group: groupManager.toPublicGroup(group, true),
+      room: groupManager.toPublicGroup(group, true),
+      messages: groupManager.getMessages(groupId),
+      users: groupManager.getOnlineUsers(groupId)
+    });
     send(ws, 'room:joined', {
-      room: roomManager.toPublicRoom(room),
-      messages: roomManager.getMessages(roomId),
-      users: roomManager.getOnlineUsers(roomId)
+      room: groupManager.toPublicGroup(group, true),
+      messages: groupManager.getMessages(groupId),
+      users: groupManager.getOnlineUsers(groupId)
     });
 
-    broadcastToRoom(roomId, 'system:message', {
-      roomId,
-      text: `${ws.user.username} joined ${room.name}.`,
+    broadcastToGroup(groupId, 'system:message', {
+      groupId,
+      roomId: groupId,
+      text: `${ws.user.username} joined ${group.groupName}.`,
       timestamp: new Date().toISOString()
     });
-    broadcastOnlineUsers(roomId);
+    broadcastOnlineUsers(groupId);
   }
 
   function handleChatMessage(ws, payload) {
-    const text = String(payload?.text || '').trim();
+    const messageText = String(payload?.message || payload?.text || '').trim();
 
-    if (!ws.roomId) {
-      send(ws, 'error', { message: 'Join a room before sending a message.' });
+    if (!ws.groupId || !groupManager.isGroupMember(ws.groupId, ws.user.username)) {
+      send(ws, 'error', { message: 'You must join this group before sending messages.' });
       return;
     }
 
-    if (!text) {
+    if (!messageText) {
       send(ws, 'error', { message: 'Message cannot be empty.' });
       return;
     }
 
-    if (text.length > 1000) {
+    if (messageText.length > 1000) {
       send(ws, 'error', { message: 'Message cannot exceed 1000 characters.' });
       return;
     }
 
-    const message = roomManager.addMessage(ws.roomId, ws.user.username, text);
-    broadcastToRoom(ws.roomId, 'message:new', { roomId: ws.roomId, message });
+    const message = groupManager.addMessage(ws.groupId, ws.user.username, messageText);
+    broadcastToGroup(ws.groupId, 'message:new', {
+      groupId: ws.groupId,
+      roomId: ws.groupId,
+      message,
+      text: message.message
+    });
   }
 
   wss.on('connection', (ws, req) => {
@@ -97,12 +112,13 @@ function setupWebSocket(server) {
     }
 
     ws.id = crypto.randomUUID();
+    ws.groupId = null;
     ws.roomId = null;
-    roomManager.setUserRoom(ws.id, ws.user.username, null);
+    groupManager.setUserGroup(ws.id, ws.user.username, null);
 
-    send(ws, 'rooms:list', {
-      rooms: roomManager.listRoomsForUser(ws.user.username)
-    });
+    const groups = groupManager.listGroupsForUser(ws.user.username);
+    send(ws, 'groups:list', { groups, rooms: groups });
+    send(ws, 'rooms:list', { groups, rooms: groups });
 
     ws.on('message', (rawMessage) => {
       let packet;
@@ -114,8 +130,8 @@ function setupWebSocket(server) {
         return;
       }
 
-      if (packet.event === 'room:join') {
-        joinRoom(ws, packet.payload?.roomId);
+      if (packet.event === 'group:join' || packet.event === 'room:join') {
+        joinGroup(ws, packet.payload?.groupId || packet.payload?.roomId);
         return;
       }
 
@@ -125,16 +141,17 @@ function setupWebSocket(server) {
     });
 
     ws.on('close', () => {
-      const oldRoomId = ws.roomId;
-      roomManager.removeConnection(ws.id);
+      const oldGroupId = ws.groupId;
+      groupManager.removeConnection(ws.id);
 
-      if (oldRoomId) {
-        broadcastToRoom(oldRoomId, 'system:message', {
-          roomId: oldRoomId,
-          text: `${ws.user.username} left the room.`,
+      if (oldGroupId) {
+        broadcastToGroup(oldGroupId, 'system:message', {
+          groupId: oldGroupId,
+          roomId: oldGroupId,
+          text: `${ws.user.username} left the group.`,
           timestamp: new Date().toISOString()
         });
-        broadcastOnlineUsers(oldRoomId);
+        broadcastOnlineUsers(oldGroupId);
       }
     });
   });

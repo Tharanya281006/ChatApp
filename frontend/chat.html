@@ -18,20 +18,20 @@
       </header>
 
       <section class="panel-section">
-        <h2>Rooms</h2>
-        <div id="roomList" class="room-list"></div>
+        <h2>Groups</h2>
+        <div id="groupList" class="room-list"></div>
       </section>
 
       <section class="panel-section card-box">
-        <h2>Create private room</h2>
-        <form id="createRoomForm" class="inline-form">
-          <input id="privateRoomName" type="text" placeholder="Room name" required>
+        <h2>Create group</h2>
+        <form id="createGroupForm" class="inline-form">
+          <input id="privateGroupName" type="text" placeholder="Group name" required>
           <button class="button secondary" type="submit">Create</button>
         </form>
       </section>
 
       <section class="panel-section card-box">
-        <h2>Join invite</h2>
+        <h2>Join group by invite</h2>
         <form id="inviteForm" class="inline-form">
           <input id="inviteCode" type="text" placeholder="Invite code" required>
           <button class="button secondary" type="submit">Join</button>
@@ -42,8 +42,8 @@
     <main class="center-panel">
       <header class="chat-header">
         <div>
-          <span class="eyebrow">Current room</span>
-          <h1 id="roomTitle">Choose a room</h1>
+          <span class="eyebrow">Current group</span>
+          <h1 id="groupTitle">Choose a group</h1>
         </div>
         <div id="inviteBox" class="invite-box hidden"></div>
       </header>
@@ -51,7 +51,7 @@
       <section id="messageList" class="message-list" aria-live="polite"></section>
 
       <form id="messageForm" class="composer">
-        <input id="messageInput" type="text" maxlength="1000" placeholder="Join a room to start chatting" autocomplete="off" disabled>
+        <input id="messageInput" type="text" maxlength="1000" placeholder="Join a group to start chatting" autocomplete="off" disabled>
         <button id="sendButton" class="button primary" type="submit" disabled>Send</button>
       </form>
     </main>

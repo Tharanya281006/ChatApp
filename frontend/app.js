@@ -6,8 +6,8 @@ const state = {
   token: localStorage.getItem(tokenKey),
   user: JSON.parse(localStorage.getItem(userKey) || 'null'),
   socket: null,
-  rooms: [],
-  currentRoomId: null
+  groups: [],
+  currentGroupId: null
 };
 
 function $(selector) {
@@ -133,12 +133,12 @@ function setupLoginPage() {
 }
 
 function setupChatPage() {
-  const roomList = $('#roomList');
+  const groupList = $('#groupList');
   const messageList = $('#messageList');
   const messageInput = $('#messageInput');
   const sendButton = $('#sendButton');
 
-  if (!roomList) {
+  if (!groupList) {
     return;
   }
 
@@ -167,19 +167,19 @@ function setupChatPage() {
     state.socket.send(JSON.stringify({ event, payload }));
   }
 
-  function renderRooms() {
-    roomList.innerHTML = '';
+  function renderGroups() {
+    groupList.innerHTML = '';
 
-    state.rooms.forEach((room) => {
+    state.groups.forEach((group) => {
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = `room-button ${room.id === state.currentRoomId ? 'active' : ''}`;
+      button.className = `group-button ${group.groupId === state.currentGroupId ? 'active' : ''}`;
       button.innerHTML = `
-        <span># ${escapeHtml(room.name)}</span>
-        ${room.isPrivate ? '<span class="private-pill">Private</span>' : ''}
+        <span># ${escapeHtml(group.groupName)}</span>
+        ${!group.isPublic ? '<span class="private-pill">Private</span>' : ''}
       `;
-      button.addEventListener('click', () => sendSocket('room:join', { roomId: room.id }));
-      roomList.appendChild(button);
+      button.addEventListener('click', () => sendSocket('group:join', { groupId: group.groupId }));
+      groupList.appendChild(button);
     });
   }
 
@@ -197,7 +197,7 @@ function setupChatPage() {
         <span class="message-author">${escapeHtml(message.username)}</span>
         <span class="message-time">${formatTime(message.timestamp)}</span>
       </div>
-      <div class="message-text">${escapeHtml(message.text)}</div>
+      <div class="message-text">${escapeHtml(message.message || message.text)}</div>
     `;
     messageList.appendChild(article);
     messageList.scrollTop = messageList.scrollHeight;
@@ -223,31 +223,31 @@ function setupChatPage() {
     });
   }
 
-  function setCurrentRoom(room, messages, users) {
-    state.currentRoomId = room.id;
-    $('#roomTitle').textContent = `# ${room.name}`;
+  function setCurrentGroup(group, messages, users) {
+    state.currentGroupId = group.groupId;
+    $('#groupTitle').textContent = `# ${group.groupName}`;
     messageInput.disabled = false;
     sendButton.disabled = false;
-    messageInput.placeholder = `Message #${room.name}`;
+    messageInput.placeholder = `Message #${group.groupName}`;
 
     const inviteBox = $('#inviteBox');
-    if (room.isPrivate && room.inviteCode) {
-      const link = `${window.location.origin}/chat?invite=${encodeURIComponent(room.inviteCode)}`;
+    if (!group.isPublic && group.inviteCode) {
+      const link = `${window.location.origin}/chat?invite=${encodeURIComponent(group.inviteCode)}`;
       inviteBox.classList.remove('hidden');
-      inviteBox.innerHTML = `Invite code: <strong>${escapeHtml(room.inviteCode)}</strong><br>${escapeHtml(link)}`;
+      inviteBox.innerHTML = `Invite code: <strong>${escapeHtml(group.inviteCode)}</strong><br>${escapeHtml(link)}`;
     } else {
       inviteBox.classList.add('hidden');
     }
 
-    renderRooms();
+    renderGroups();
     renderMessages(messages);
     renderOnlineUsers(users);
   }
 
   function handleSocketPacket(packet) {
-    if (packet.event === 'rooms:list') {
-      state.rooms = packet.payload.rooms;
-      renderRooms();
+    if (packet.event === 'groups:list') {
+      state.groups = packet.payload.groups || packet.payload.rooms || [];
+      renderGroups();
 
       const inviteCode = new URLSearchParams(window.location.search).get('invite');
       if (inviteCode) {
@@ -256,28 +256,28 @@ function setupChatPage() {
         return;
       }
 
-      if (!state.currentRoomId && state.rooms.length > 0) {
-        sendSocket('room:join', { roomId: state.rooms[0].id });
+      if (!state.currentGroupId && state.groups.length > 0) {
+        sendSocket('group:join', { groupId: state.groups[0].groupId });
       }
       return;
     }
 
-    if (packet.event === 'room:joined') {
-      setCurrentRoom(packet.payload.room, packet.payload.messages, packet.payload.users);
+    if (packet.event === 'group:joined') {
+      setCurrentGroup(packet.payload.group || packet.payload.room, packet.payload.messages, packet.payload.users);
       return;
     }
 
-    if (packet.event === 'message:new' && packet.payload.roomId === state.currentRoomId) {
+    if (packet.event === 'message:new' && packet.payload.groupId === state.currentGroupId) {
       renderMessage(packet.payload.message);
       return;
     }
 
-    if (packet.event === 'system:message' && packet.payload.roomId === state.currentRoomId) {
+    if (packet.event === 'system:message' && packet.payload.groupId === state.currentGroupId) {
       renderSystemMessage(packet.payload);
       return;
     }
 
-    if (packet.event === 'users:online' && packet.payload.roomId === state.currentRoomId) {
+    if (packet.event === 'users:online' && packet.payload.groupId === state.currentGroupId) {
       renderOnlineUsers(packet.payload.users);
       return;
     }
@@ -302,40 +302,40 @@ function setupChatPage() {
     });
   }
 
-  async function refreshRooms() {
-    const data = await api('/api/rooms');
-    state.rooms = data.rooms;
-    renderRooms();
+  async function refreshGroups() {
+    const data = await api('/api/groups');
+    state.groups = data.groups;
+    renderGroups();
   }
 
   async function joinInvite(inviteCode) {
     try {
-      const data = await api('/api/rooms/join', {
+      const data = await api('/api/groups/join', {
         method: 'POST',
         body: JSON.stringify({ inviteCode })
       });
 
-      await refreshRooms();
-      sendSocket('room:join', { roomId: data.room.id });
-      showToast(`Joined ${data.room.name}.`);
+      await refreshGroups();
+      sendSocket('group:join', { groupId: data.group.groupId });
+      showToast(`Joined ${data.group.groupName}.`);
     } catch (error) {
       showToast(error.message);
     }
   }
 
-  $('#createRoomForm').addEventListener('submit', async (event) => {
+  $('#createGroupForm').addEventListener('submit', async (event) => {
     event.preventDefault();
 
     try {
-      const data = await api('/api/rooms/private', {
+      const data = await api('/api/groups', {
         method: 'POST',
-        body: JSON.stringify({ name: $('#privateRoomName').value })
+        body: JSON.stringify({ name: $('#privateGroupName').value })
       });
 
-      $('#privateRoomName').value = '';
-      await refreshRooms();
-      sendSocket('room:join', { roomId: data.room.id });
-      showToast(`Created room. Invite code: ${data.room.inviteCode}`);
+      $('#privateGroupName').value = '';
+      await refreshGroups();
+      sendSocket('group:join', { groupId: data.group.groupId });
+      showToast(`Created group. Invite code: ${data.group.inviteCode}`);
     } catch (error) {
       showToast(error.message);
     }

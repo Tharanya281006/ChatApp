@@ -244,12 +244,14 @@ input:focus {
   text-transform: uppercase;
 }
 
-.room-list {
+.room-list,
+.group-list {
   display: grid;
   gap: 8px;
 }
 
-.room-button {
+.room-button,
+.group-button {
   display: flex;
   justify-content: space-between;
   width: 100%;
@@ -262,7 +264,9 @@ input:focus {
 }
 
 .room-button:hover,
-.room-button.active {
+.room-button.active,
+.group-button:hover,
+.group-button.active {
   color: var(--text);
   background: var(--panel-2);
 }
