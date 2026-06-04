@@ -154,9 +154,8 @@ function setupChatPage() {
   });
 
   function socketUrl() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(state.token)}`;
-  }
+  return `wss://chatapp-production-b16a.up.railway.app/ws?token=${encodeURIComponent(state.token)}`;
+}
 
   function sendSocket(event, payload = {}) {
     if (!state.socket || state.socket.readyState !== WebSocket.OPEN) {
